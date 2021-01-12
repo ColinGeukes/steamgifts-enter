@@ -1,4 +1,4 @@
-#SteamGifts-enter
+# SteamGifts-enter
 Simple automation to enter steamgifts giveaways, by using a chrome browser and a custom profile
 
 ## Configuration
