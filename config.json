@@ -1,0 +1,13 @@
+{
+  "chrome-profile-path": "C:\\Users\\TUDelftSID\\AppData\\Local\\Google\\Chrome\\User Data\\Profile 2",
+  "search": {
+    "level_min": 2,
+    "level_max": 8,
+    "entry_min": 0,
+    "entry_max": 5000,
+    "point_min": 10,
+    "point_max": 50,
+    "rating_min": 60,
+    "rating_max": 100
+  }
+}
