@@ -1,5 +1,7 @@
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import InvalidArgumentException
+import requests
 from bs4 import BeautifulSoup
 import random
 
@@ -8,17 +10,25 @@ import time
 
 
 class SteamGifts:
-    base_search_url = "https://www.steamgifts.com/giveaways/search?"
+    base_url = "https://www.steamgifts.com/"
+    base_search_url = base_url + "giveaways/search?"
     search_url = ""
+    cookie = {}
+    profile = {}
 
     def __init__(self, config):
         # Load the config.
         self.config = config
 
         # Setup the driver.
-        options = webdriver.ChromeOptions()
-        options.add_argument('--user-data-dir={}'.format(config["chrome-profile-path"]))
-        self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+        try:
+            options = webdriver.ChromeOptions()
+            options.add_argument('--user-data-dir={}'.format(config["chrome-profile-path"]))
+            self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+        except InvalidArgumentException:
+            print("Could not open a browser instance, make sure that all other instances of the profile " +
+                  "are closed before running the application.")
+            exit(-1)
 
         # Load the profile.
         self.get_profile_info()
@@ -27,11 +37,17 @@ class SteamGifts:
         self.generate_search_url()
 
         # Retrieve giveaways.
-        self.retrieve_giveaways()
+        giveaways = self.retrieve_giveaways()
+
+        # Enter the giveaways.
+        self.enter_giveaways(giveaways)
+
+        # Close the driver.
+        self.driver.close()
 
     def get_soup(self, url):
         # Let the request wait a bit, to avoid bot detection.
-        time.sleep(random.randint(200, 500) / 1000)
+        time.sleep(float(random.randint(300, 800)) / 1000)
         self.driver.implicitly_wait(30)
 
         # Get the page
@@ -44,15 +60,21 @@ class SteamGifts:
         # Get profile soup.
         soup = self.get_soup("https://www.steamgifts.com/account/settings/profile")
 
+        # Load the required cookie for requests.
+        print(self.driver.get_cookie("PHPSESSID")["value"])
+        self.cookie = {
+            'PHPSESSID': self.driver.get_cookie("PHPSESSID")["value"]
+        }
+
+        # Load the profile.
         profile_container = soup.find("a", {"class": "nav__button nav__button--is-dropdown", "href": "/account"})
         profile_spans = profile_container.findAll("span")
-
         self.profile = dict({
-            "p": int(profile_spans[0].text),
+            "points": int(profile_spans[0].text),
             "level": int(profile_spans[1].text.split(" ")[1])
         })
 
-        print("profile", self.profile)
+        print("profile", self.profile, self.cookie)
 
     def generate_search_url(self):
         # Create a custom search string.
@@ -103,43 +125,88 @@ class SteamGifts:
             if 'is-faded' in giveaway_entry['class']:
                 continue
 
+            # Get the name and set the rating default.
             app_name = giveaway_entry.find("a", {"class": "giveaway__heading__name"}).text
+            steam_db_rating = -1
 
-            # Get the steam app id.
-            steam_app_id = giveaway_entry.find("a", {"class": "giveaway__icon"})['href'].split("/")[-2]
-            steam_db_url = "https://steamdb.info/app/" + steam_app_id
+            # The url can either be an app or a bundle, we cannot deal with bundles. TODO: Fix bundles.
+            steam_app_url_split = giveaway_entry.find("a", {"class": "giveaway__icon"})['href'].split("/")
+            if steam_app_url_split[-3] == "app":
 
-            # Get the app rating from steam db.
-            try:
-                steam_db_soup = self.get_soup(steam_db_url)
-                steam_db_rating = float(
-                    steam_db_soup.find("div", {"class": "header-thing-number"}).text.split(" ")[1][:-1])
-            except AttributeError:
-                print("Could not retrieve data from: ", app_name, steam_db_url)
-                continue
-            print(steam_db_rating)
+                steam_app_id = steam_app_url_split[-2]
 
-            # Check if the rating is inside the requested boundaries.
-            if config["search"]["rating_min"] and steam_db_rating < config["search"]["rating_min"]:
-                # The game did not satisfy the min rating requirements.
-                continue
+                if config["search"]["use_steam_db"]:
+                    steam_db_url = "https://steamdb.info/app/" + steam_app_id
 
-            # Check if the rating is inside the requested boundaries.
-            if config["search"]["rating_max"] and steam_db_rating > config["search"]["rating_max"]:
-                # The game did not satisfy the min rating requirements.
-                continue
+                    # Get the app rating from steam db.
+                    try:
+                        steam_db_soup = self.get_soup(steam_db_url)
+                        steam_db_rating = float(
+                            steam_db_soup.find("div", {"class": "header-thing-number"}).text.split(" ")[1][:-1])
+                    except AttributeError:
+                        # TODO: Fix error for packs, can not find packs.
+                        print("Could not retrieve data from: ", app_name, steam_db_url)
+                        continue
+
+                    # Check if the rating is inside the requested boundaries.
+                    if config["search"]["rating_min"] and steam_db_rating < config["search"]["rating_min"]:
+                        # The game did not satisfy the min rating requirements.
+                        continue
+
+                    # Check if the rating is inside the requested boundaries.
+                    if config["search"]["rating_max"] and steam_db_rating > config["search"]["rating_max"]:
+                        # The game did not satisfy the min rating requirements.
+                        continue
 
             # Append to the entries.
             parsed_entries.append({
                 'name': app_name,
                 'points': int(giveaway_entry.find_all("span", {"class": "giveaway__heading__thin"})[-1].text[1:-2]),
-                'id': steam_app_id,
                 'page': giveaway_entry.find("a", {"class": "giveaway__heading__name"})['href'],
                 'rating': steam_db_rating
             })
 
-        # Print all the parsed entries
-        print(parsed_entries)
+        # Sort the entries.
+        return sorted(parsed_entries, key=lambda row: (-row['rating'], -row['points']))
+
+    def enter_giveaways(self, giveaways):
+        # Loop through each giveaway.
+        for giveaway in giveaways:
+            self.enter_giveaway(giveaway)
+
+    def enter_giveaway(self, giveaway):
+
+        # Check if we have enough points to enter.
+        if giveaway["points"] > self.profile["points"]:
+            return False
+
+        # Get the page soup.
+        giveaway_soup = self.get_soup(self.base_url + giveaway["page"])
+
+        # Get the form
+        entry_form = giveaway_soup.find("div", {"class": "sidebar"}).find("form")
+
+        # Get the data for the request. TODO: We do not need to load these tokens and values from here, no need to access this page.
+        xsrf_token = entry_form.find("input", {"name": "xsrf_token"})["value"]
+        code = entry_form.find("input", {"name": "code"})["value"]
+
+        # Send the server a request to join the giveaway (with some sleep before).
+        time.sleep(float(random.randint(300, 950)) / 1000)
+        entry = requests.post(self.base_url + 'ajax.php',
+                              data={'xsrf_token': xsrf_token, 'do': 'entry_insert', 'code': code},
+                              cookies=self.cookie)
+
+        # Check if the request was succesful, so we can lower the points available on the profile.
+        json_data = json.loads(entry.text)
+        if json_data['type'] == 'success':
+            # Lower the total points of the profile
+            self.profile["points"] -= giveaway["points"]
+
+            # Print that we entered the give-away.
+            print("Entered giveaway: ", giveaway)
+
+            return True
+        return False
 
 
 if __name__ == '__main__':
