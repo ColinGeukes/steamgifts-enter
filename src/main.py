@@ -211,7 +211,7 @@ class SteamGifts:
 
 if __name__ == '__main__':
     # Load the config
-    with open('config.json') as f:
+    with open('../config.json') as f:
         config = json.load(f)
 
     # Create the steamGifts class
