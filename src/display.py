@@ -1,9 +1,14 @@
 import tkinter as tk
 import json
 
+log_info = {'fg': 'black'}
+log_verbose = {'fg': 'blue'}
+log_error = {'fg': 'red'}
+
 
 class Display(tk.Tk):
     config = dict()
+    log_counter = 0
 
     def __init__(self):
         super().__init__()
@@ -31,13 +36,14 @@ class Display(tk.Tk):
         tk.Button(self, text='Quit', command=self.quit).grid(row=4, sticky=tk.NSEW, pady=4)
 
         # Create the scroll text field.
-        text_container = tk.Frame(self, borderwidth=1, relief="sunken")
-        self.log = tk.Text(text_container, state=tk.DISABLED, width=24, height=13, wrap="none", borderwidth=0)
+        text_container = tk.Frame(self, borderwidth=1, relief="sunken", background="white")
+        self.log = tk.Listbox(text_container, width=24, height=13,  borderwidth=0, highlightthickness=0)
         text_vsb = tk.Scrollbar(text_container, orient="vertical", command=self.log.yview)
         text_hsb = tk.Scrollbar(text_container, orient="horizontal", command=self.log.xview)
         self.log.configure(yscrollcommand=text_vsb.set, xscrollcommand=text_hsb.set)
+        self.log.bindtags((self.log, self, "all"))
 
-        self.log.grid(row=0, column=0, sticky="nsew")
+        self.log.grid(row=0, column=0, sticky="nsew", pady=10, padx=10)
         text_vsb.grid(row=0, column=1, sticky="ns")
         text_hsb.grid(row=1, column=0, sticky="ew")
 
@@ -56,13 +62,24 @@ class Display(tk.Tk):
         with open('data.txt', 'w') as f:
             json.dump(self.config, f)
 
-    def log_console_text(self, text):
-        self.log.configure(state='normal')
-        self.log.insert(tk.END, text)
-        self.log.configure(state='disabled')
+    def log_console_text(self, text, config=None):
+        # Split the lines.
+        split_lines = text.split("\n")
+
+        # Add each line separately to the log.
+        for split_line in split_lines:
+            # Insert the line.
+            self.log.insert(tk.END, split_line)
+
+            # Set the coloring.
+            if config is not None:
+                self.log.itemconfig(self.log_counter, config)
+
+            # Increment the counter.
+            self.log_counter = self.log_counter + 1
 
     def enter(self):
-        self.log_console_text("Entered\n")
+        self.log_console_text("Entered\n2")
 
     def show_entry_fields(self):
         print("First Name: %s" % (self.entry_chrome_profile_path.get()))
