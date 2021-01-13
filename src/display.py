@@ -1,6 +1,8 @@
 import tkinter as tk
 import json
 
+from src.steamGifts import SteamGifts
+
 log_info = {'fg': 'black'}
 log_verbose = {'fg': 'blue'}
 log_error = {'fg': 'red'}
@@ -9,6 +11,7 @@ log_error = {'fg': 'red'}
 class Display(tk.Tk):
     config = dict()
     log_counter = 0
+    sg_bot = None
 
     def __init__(self):
         super().__init__()
@@ -17,10 +20,10 @@ class Display(tk.Tk):
         self.load_config()
 
         # Set the title of the application
-        self.title('Steamgifts Giveaway Enter Tool')
+        self.title('SteamGifts Giveaway Enter Tool')
 
         # Create the PATH fill-in field.
-        tk.Label(self, text="Goole Chrome Profile Path:").grid(row=0, sticky=tk.NSEW)
+        tk.Label(self, text="Google Chrome Profile Path:").grid(row=0, sticky=tk.NSEW)
         self.entry_chrome_profile_path = tk.Entry(self, text=self.config["chrome-profile-path"])
         self.entry_chrome_profile_path.grid(row=1, sticky=tk.NSEW)
         self.entry_chrome_profile_path.insert(0, self.config["chrome-profile-path"])
@@ -37,7 +40,7 @@ class Display(tk.Tk):
 
         # Create the scroll text field.
         text_container = tk.Frame(self, borderwidth=1, relief="sunken", background="white")
-        self.log = tk.Listbox(text_container, width=24, height=13,  borderwidth=0, highlightthickness=0)
+        self.log = tk.Listbox(text_container, width=24, height=13, borderwidth=0, highlightthickness=0)
         text_vsb = tk.Scrollbar(text_container, orient="vertical", command=self.log.yview)
         text_hsb = tk.Scrollbar(text_container, orient="horizontal", command=self.log.xview)
         self.log.configure(yscrollcommand=text_vsb.set, xscrollcommand=text_hsb.set)
@@ -64,7 +67,7 @@ class Display(tk.Tk):
 
     def log_console_text(self, text, config=None):
         # Split the lines.
-        split_lines = text.split("\n")
+        split_lines = str(text).split("\n")
 
         # Add each line separately to the log.
         for split_line in split_lines:
@@ -77,9 +80,13 @@ class Display(tk.Tk):
 
             # Increment the counter.
             self.log_counter = self.log_counter + 1
+            self.update()
 
     def enter(self):
-        self.log_console_text("Entered\n2")
+        self.log_console_text("Starting the SteamGifts enter bot.", config=log_verbose)
+
+        # Start the bot TODO: Add multi-threading to allow functioning GUI.
+        self.sg_bot = SteamGifts(self.config, self)
 
     def show_entry_fields(self):
         print("First Name: %s" % (self.entry_chrome_profile_path.get()))

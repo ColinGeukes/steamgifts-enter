@@ -15,10 +15,12 @@ class SteamGifts:
     search_url = ""
     cookie = {}
     profile = {}
+    xsrf_token = ""
 
-    def __init__(self, config):
+    def __init__(self, config, display):
         # Load the config.
         self.config = config
+        self.display = display
 
         # Setup the driver.
         try:
@@ -45,9 +47,10 @@ class SteamGifts:
         # Close the driver.
         self.driver.close()
 
-    def get_soup(self, url):
+    def get_soup(self, url, sleep=True):
         # Let the request wait a bit, to avoid bot detection.
-        time.sleep(float(random.randint(300, 800)) / 1000)
+        if sleep:
+            time.sleep(float(random.randint(300, 800)) / 1000)
         self.driver.implicitly_wait(30)
 
         # Get the page
@@ -58,7 +61,7 @@ class SteamGifts:
 
     def get_profile_info(self):
         # Get profile soup.
-        soup = self.get_soup("https://www.steamgifts.com/account/settings/profile")
+        soup = self.get_soup(self.base_url, sleep=False)
 
         # Load the required cookie for requests.
         print(self.driver.get_cookie("PHPSESSID")["value"])
@@ -71,7 +74,8 @@ class SteamGifts:
         profile_spans = profile_container.findAll("span")
         self.profile = dict({
             "points": int(profile_spans[0].text),
-            "level": int(profile_spans[1].text.split(" ")[1])
+            "level": int(profile_spans[1].text.split(" ")[1]),
+            "xsrf_token": soup.find("input", {"name": "xsrf_token"})["value"]
         })
 
         print("profile", self.profile, self.cookie)
@@ -79,7 +83,7 @@ class SteamGifts:
     def generate_search_url(self):
         # Create a custom search string.
         search_str = ""
-        config_search = config["search"]
+        config_search = self.config["search"]
         if config_search:
 
             # Check if level min was filled in.
@@ -135,7 +139,7 @@ class SteamGifts:
 
                 steam_app_id = steam_app_url_split[-2]
 
-                if config["search"]["use_steam_db"]:
+                if self.config["search"]["use_steam_db"]:
                     steam_db_url = "https://steamdb.info/app/" + steam_app_id
 
                     # Get the app rating from steam db.
@@ -149,23 +153,28 @@ class SteamGifts:
                         continue
 
                     # Check if the rating is inside the requested boundaries.
-                    if config["search"]["rating_min"] and steam_db_rating < config["search"]["rating_min"]:
+                    if self.config["search"]["rating_min"] and steam_db_rating < self.config["search"]["rating_min"]:
                         # The game did not satisfy the min rating requirements.
                         continue
 
                     # Check if the rating is inside the requested boundaries.
-                    if config["search"]["rating_max"] and steam_db_rating > config["search"]["rating_max"]:
+                    if self.config["search"]["rating_max"] and steam_db_rating > self.config["search"]["rating_max"]:
                         # The game did not satisfy the min rating requirements.
                         continue
 
             # Append to the entries.
-            parsed_entries.append({
+            entry = {
                 'name': app_name,
                 'points': int(giveaway_entry.find_all("span", {"class": "giveaway__heading__thin"})[-1].text[1:-2]),
                 'page': giveaway_entry.find("a", {"class": "giveaway__heading__name"})['href'],
+                'giveaway_id': giveaway_entry.find("a", {"class": "giveaway__heading__name"})['href'].split("/")[2],
                 'rating': steam_db_rating
-            })
+            }
+            parsed_entries.append(entry)
 
+            self.display.log_console_text(str(entry))
+
+        # TODO: If too few entries in here, then mine the next page as well.
         # Sort the entries.
         return sorted(parsed_entries, key=lambda row: (-row['rating'], -row['points']))
 
@@ -207,12 +216,3 @@ class SteamGifts:
 
             return True
         return False
-
-
-if __name__ == '__main__':
-    # Load the config
-    with open('../config.json') as f:
-        config = json.load(f)
-
-    # Create the steamGifts class
-    sg = SteamGifts(config)
