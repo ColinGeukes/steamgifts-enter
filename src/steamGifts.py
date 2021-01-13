@@ -7,6 +7,7 @@ import random
 
 import json
 import time
+from src.log_colors import *
 
 
 class SteamGifts:
@@ -15,7 +16,6 @@ class SteamGifts:
     search_url = ""
     cookie = {}
     profile = {}
-    xsrf_token = ""
 
     def __init__(self, config, display):
         # Load the config.
@@ -172,13 +172,15 @@ class SteamGifts:
             }
             parsed_entries.append(entry)
 
-            self.display.log_console_text(str(entry))
+            self.display.log_console_text("Adding giveaway: " + str(entry))
 
         # TODO: If too few entries in here, then mine the next page as well.
         # Sort the entries.
         return sorted(parsed_entries, key=lambda row: (-row['rating'], -row['points']))
 
     def enter_giveaways(self, giveaways):
+        self.display.log_console_text("Start entering giveaways!", config=log_verbose)
+
         # Loop through each giveaway.
         for giveaway in giveaways:
             self.enter_giveaway(giveaway)
@@ -189,30 +191,26 @@ class SteamGifts:
         if giveaway["points"] > self.profile["points"]:
             return False
 
-        # Get the page soup.
-        giveaway_soup = self.get_soup(self.base_url + giveaway["page"])
-
-        # Get the form
-        entry_form = giveaway_soup.find("div", {"class": "sidebar"}).find("form")
-
-        # Get the data for the request. TODO: We do not need to load these tokens and values from here, no need to access this page.
-        xsrf_token = entry_form.find("input", {"name": "xsrf_token"})["value"]
-        code = entry_form.find("input", {"name": "code"})["value"]
+        # First sleep random amount of time to not get a block.
+        time.sleep(float(random.randint(300, 950)) / 1000)
 
         # Send the server a request to join the giveaway (with some sleep before).
-        time.sleep(float(random.randint(300, 950)) / 1000)
         entry = requests.post(self.base_url + 'ajax.php',
-                              data={'xsrf_token': xsrf_token, 'do': 'entry_insert', 'code': code},
+                              data={'xsrf_token': self.profile["xsrf_token"], 'do': 'entry_insert', 'code': giveaway["giveaway_id"]},
                               cookies=self.cookie)
 
-        # Check if the request was succesful, so we can lower the points available on the profile.
+        # Check if the request was successful, so we can lower the points available on the profile.
         json_data = json.loads(entry.text)
+
         if json_data['type'] == 'success':
             # Lower the total points of the profile
             self.profile["points"] -= giveaway["points"]
 
             # Print that we entered the give-away.
             print("Entered giveaway: ", giveaway)
+            self.display.log_console_text("Entered giveaway: " + str(giveaway), config=log_info)
 
             return True
+
+        self.display.log_console_text("Could not enter giveaway: " + str(json_data), config=log_error)
         return False

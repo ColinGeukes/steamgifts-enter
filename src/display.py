@@ -2,10 +2,7 @@ import tkinter as tk
 import json
 
 from src.steamGifts import SteamGifts
-
-log_info = {'fg': 'black'}
-log_verbose = {'fg': 'blue'}
-log_error = {'fg': 'red'}
+from src.log_colors import *
 
 
 class Display(tk.Tk):
