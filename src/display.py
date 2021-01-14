@@ -66,6 +66,13 @@ class Display(tk.Tk):
 
         text_container.grid(column=1, row=1, rowspan=4, padx=(10, 0), sticky=tk.NSEW)
 
+        # Add entry text to the console log.
+        self.log_console_text("Welcome to the steamGifts auto enter bot!", log_verbose)
+        self.log_console_text("To start, first select the custom Chrome profile at the top.")
+        self.log_console_text("Make sure that the profile is already logged in to SteamGifts.")
+        self.log_console_text("Simply press \"Enter Giveaways\" to enter giveaways automatically.")
+        self.log_console_text("Good luck!")
+
         tk.mainloop()
 
     def create_profile_display(self, profile):
@@ -128,7 +135,7 @@ class Display(tk.Tk):
             self.update()
 
     def enter(self):
-        self.log_console_text("Starting the SteamGifts enter bot.", config=log_verbose)
+        self.log_console_text("\nStarting the SteamGifts enter bot.", config=log_verbose)
 
         # Start the bot TODO: Add multi-threading to allow functioning GUI.
         self.sg_bot = SteamGifts(self.config, self)

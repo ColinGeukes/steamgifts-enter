@@ -23,8 +23,10 @@ class SteamGifts:
         self.config = config
         self.display = display
 
-        # Setup the driver.
+        # Setup the driver, exit if the setup was not successful.
         self.driver = self.setup_driver()
+        if self.driver is None:
+            return
 
         # Load the profile.
         self.get_profile_info()
@@ -47,9 +49,10 @@ class SteamGifts:
             options.add_argument('--user-data-dir={}'.format(self.config["chrome-profile-path"]))
             return webdriver.Chrome(ChromeDriverManager().install(), options=options)
         except InvalidArgumentException:
-            print("Could not open a browser instance, make sure that all other instances of the profile " +
-                  "are closed before running the application.")
-            exit(-1)
+            self.display.log_console_text(
+                "Could not open a browser instance, make sure that all other chrome instances of the profile " +
+                "are closed before running the application.", log_error)
+            return None
 
     def get_soup(self, url, sleep=True):
         # Do a random sleep before access.
@@ -95,7 +98,6 @@ class SteamGifts:
         self.display.log_console_text("\nUser Profile:", log_verbose)
         self.display.log_console_text(" - PHPSESSID: %s\n - xsrf_token: %s\n - Level: %i\n - Points: %i" % (
             self.cookie["PHPSESSID"], self.profile["xsrf_token"], self.profile["level"], self.profile["points"]))
-
 
     def generate_search_url(self):
         # Log to the GUI console.
