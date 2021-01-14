@@ -80,6 +80,9 @@ class Display(tk.Tk):
 
             # Increment the counter.
             self.log_counter = self.log_counter + 1
+
+            # Auto move the yview
+            self.log.yview_moveto(1)
             self.update()
 
     def enter(self):

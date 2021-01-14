@@ -13,9 +13,10 @@ from src.log_colors import *
 class SteamGifts:
     base_url = "https://www.steamgifts.com/"
     base_search_url = base_url + "giveaways/search?"
-    search_url = ""
+    search_params = []
     cookie = {}
     profile = {}
+    min_entries = 10
 
     def __init__(self, config, display):
         # Load the config.
@@ -53,6 +54,7 @@ class SteamGifts:
     def get_soup(self, url, sleep=True):
         # Do a random sleep before access.
         random_sleep(sleep)
+        self.driver.implicitly_wait(30 + random.randint(0, 15))
 
         # Get profile soup.
         self.driver.get(url)
@@ -96,50 +98,81 @@ class SteamGifts:
         # Log to the GUI console.
         self.display.log_console_text("\nGenerating search string.", log_verbose)
 
-        # Create a custom search string. TODO: Use string[] join instead.
-        search_str = ""
+        # Create a custom search string.
+        self.search_params = []
         config_search = self.config["search"]
         if config_search:
 
             # Check if level min was filled in.
             if config_search["level_min"] is not None:
-                search_str += "level_min={}&".format(str(min(self.profile["level"], config_search["level_min"])))
+                self.search_params.append(
+                    "level_min={}".format(str(min(self.profile["level"], config_search["level_min"]))))
 
             # Check if level max was filled in.
             if config_search["level_max"] is not None:
-                search_str += "level_max={}&".format(str(min(self.profile["level"], config_search["level_max"])))
+                self.search_params.append(
+                    "level_max={}".format(str(min(self.profile["level"], config_search["level_max"]))))
 
             # Create a simple add function
-            def simple_add(key):
+            def create_simple_param(key):
                 if config_search[key] is not None:
-                    return "{key}={value}&".format(key=key, value=config_search[key])
+                    return "{key}={value}".format(key=key, value=config_search[key])
                 return ""
 
-            search_str += simple_add("entry_min")
-            search_str += simple_add("entry_max")
-            search_str += simple_add("point_min")
-            search_str += simple_add("point_max")
+            self.search_params.append(create_simple_param("entry_min"))
+            self.search_params.append(create_simple_param("entry_max"))
+            self.search_params.append(create_simple_param("point_min"))
+            self.search_params.append(create_simple_param("point_max"))
 
         # Create the final search url.
-        self.search_url = (self.base_search_url + search_str)[:-1]
-        self.display.log_console_text("Search String: %s" % self.search_url)
+        # self.search_str = "&".join(search_params)
+        self.display.log_console_text("Search params: %s" % str(self.search_params))
 
     def retrieve_giveaways(self):
+        # Keep track of all the parsed entries.
+        parsed_entries = []
+
         # Log the retrieval of giveaways to the console.
         self.display.log_console_text("\nRetrieving the giveaways to possible enter.", log_verbose)
 
-        soup = self.get_request_soup(self.search_url)
+        # Keep looping till we found enough entries.
+        current_page = 1
+        while len(parsed_entries) < self.min_entries:
+            # Start the search for the given page.
+            entries_found = self.retrieve_giveaways_page(parsed_entries, current_page)
 
-        # A function to retrieve a tag without an class.
-        def has_no_class(tag):
-            return not tag.has_attr('class')
+            # Stop if we mined all the pages possible.
+            if not entries_found:
+                break
 
+            # Increment the page.
+            current_page += 1
+
+        # Sort the entries and return them to enter.
+        return sorted(parsed_entries, key=lambda row: (-row['rating'], -row['points']))
+
+    def retrieve_paged_search_string(self, page):
+        # Create copy of search params and add page search param.
+        search_params_copy = self.search_params.copy()
+        search_params_copy.append("page=%s" % str(page))
+
+        # Return the final search url.
+        return self.base_search_url + "&".join(search_params_copy)
+
+    def retrieve_giveaways_page(self, parsed_entries, page):
+        # Retrieve the soup of the current search with the given page
+        soup = self.get_request_soup(self.retrieve_paged_search_string(page))
+        self.display.log_console_text("Retrieving giveaways for page %i." % page)
+
+        # Check if the site give a no-results page, if no-results then return false.
+        if soup.find("div", {"class": "pagination pagination--no-results"}) is not None:
+            self.display.log_console_text("There were no entries at page %i." % page, log_error)
+            return False
+
+        # Retrieve all the entries.
         giveaway_list = soup.find("div", "widget-container").findChild(has_no_class, recursive=False).findChild(
             has_no_class, recursive=False)
         giveaway_entries = giveaway_list.findAll("div", "giveaway__row-inner-wrap")
-
-        # Keep track of all the parsed entries.
-        parsed_entries = []
 
         # Print the giveaways
         for giveaway_entry in giveaway_entries:
@@ -192,9 +225,7 @@ class SteamGifts:
 
             self.display.log_console_text("Adding giveaway: " + str(entry))
 
-        # TODO: If too few entries in here, then mine the next page as well.
-        # Sort the entries.
-        return sorted(parsed_entries, key=lambda row: (-row['rating'], -row['points']))
+        return True
 
     def enter_giveaways(self, giveaways):
         self.display.log_console_text("\nStart entering giveaways!", config=log_verbose)
@@ -233,6 +264,11 @@ class SteamGifts:
 
         self.display.log_console_text("Could not enter giveaway: " + str(json_data), config=log_error)
         return False
+
+
+# A function to retrieve a tag without an class.
+def has_no_class(tag):
+    return not tag.has_attr('class')
 
 
 def random_sleep(sleep):
