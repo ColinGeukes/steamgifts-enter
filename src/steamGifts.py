@@ -125,7 +125,6 @@ class SteamGifts:
             self.search_params.append(create_simple_param("point_max"))
 
         # Create the final search url.
-        # self.search_str = "&".join(search_params)
         self.display.log_console_text("Search params: %s" % str(self.search_params))
 
     def retrieve_giveaways(self):
@@ -143,6 +142,7 @@ class SteamGifts:
 
             # Stop if we mined all the pages possible.
             if not entries_found:
+                self.display.log_console_text("There were no more entries matching your search criteria.", log_warning)
                 break
 
             # Increment the page.
@@ -182,50 +182,101 @@ class SteamGifts:
 
             # Get the name and set the rating default.
             app_name = giveaway_entry.find("a", {"class": "giveaway__heading__name"}).text
-            steam_db_rating = -1
 
-            # The url can either be an app or a bundle, we cannot deal with bundles. TODO: Fix bundles.
-            steam_app_url_split = giveaway_entry.find("a", {"class": "giveaway__icon"})['href'].split("/")
-            if steam_app_url_split[-3] == "app":
+            # Retrieve the steamDB rating.
+            sdb_rating = self.get_giveaway_score(giveaway_entry.find("a", {"class": "giveaway__icon"})['href'])
 
-                steam_app_id = steam_app_url_split[-2]
-
-                if self.config["search"]["use_steam_db"]:
-                    steam_db_url = "https://steamdb.info/app/" + steam_app_id
-
-                    # Get the app rating from steam db.
-                    try:
-                        steam_db_soup = self.get_soup(steam_db_url)
-                        steam_db_rating = float(
-                            steam_db_soup.find("div", {"class": "header-thing-number"}).text.split(" ")[1][:-1])
-                    except AttributeError:
-                        # TODO: Fix error for packs, can not find packs.
-                        print("Could not retrieve data from: ", app_name, steam_db_url)
-                        continue
-
-                    # Check if the rating is inside the requested boundaries.
-                    if self.config["search"]["rating_min"] and steam_db_rating < self.config["search"]["rating_min"]:
-                        # The game did not satisfy the min rating requirements.
-                        continue
-
-                    # Check if the rating is inside the requested boundaries.
-                    if self.config["search"]["rating_max"] and steam_db_rating > self.config["search"]["rating_max"]:
-                        # The game did not satisfy the min rating requirements.
-                        continue
+            # Check if the minimal rating filter passed.
+            if not self.filter_giveaway_sdb_rating(sdb_rating):
+                # Show a warning error that it had insufficient rating, thus was not added.
+                self.display.log_console_text("Passing giveaway: %s, insufficient rating on steamDB." % app_name)
+                continue
 
             # Append to the entries.
-            entry = {
-                'name': app_name,
-                'points': int(giveaway_entry.find_all("span", {"class": "giveaway__heading__thin"})[-1].text[1:-2]),
-                'page': giveaway_entry.find("a", {"class": "giveaway__heading__name"})['href'],
-                'giveaway_id': giveaway_entry.find("a", {"class": "giveaway__heading__name"})['href'].split("/")[2],
-                'rating': steam_db_rating
-            }
+            entry = dict(
+                name=app_name,
+                points=int(giveaway_entry.find_all("span", {"class": "giveaway__heading__thin"})[-1].text[1:-2]),
+                page=giveaway_entry.find("a", {"class": "giveaway__heading__name"})['href'],
+                giveaway_id=giveaway_entry.find("a", {"class": "giveaway__heading__name"})['href'].split("/")[2],
+                rating=sdb_rating
+            )
             parsed_entries.append(entry)
 
+            # Log the addition of the give-away.
             self.display.log_console_text("Adding giveaway: " + str(entry))
 
         return True
+
+    def filter_giveaway_sdb_rating(self, sdb_rating):
+        # Check if db is not active, if so always let it pass.
+        if not self.config["search"]["use_steam_db"]:
+            return True
+
+        # Check if the rating is inside the requested boundaries.
+        if self.config["search"]["rating_min"] and sdb_rating < self.config["search"]["rating_min"]:
+            # The game did not satisfy the min rating requirements.
+            return False
+
+        # Check if the rating is inside the requested boundaries.
+        if self.config["search"]["rating_max"] and sdb_rating > self.config["search"]["rating_max"]:
+            # The game did not satisfy the min rating requirements.
+            return False
+
+        # Filter passed successfully.
+        return True
+
+    def get_giveaway_score(self, steam_url):
+        # Return perfect score if we are not using the steam db score calculating.
+        if not self.config["search"]["use_steam_db"]:
+            return 100
+
+        # Split the url to check if the giveaway is a bundle or an app.
+        steam_app_url_split = steam_url.split("/")
+
+        steam_type = steam_app_url_split[-3]
+        steam_id = steam_app_url_split[-2]
+
+        # Return the game score if the entry is a single game.
+        if steam_type == "app":
+            return self.get_game_score(steam_id)
+
+        # Return the bundle score if the entry is a bundle (multiple games).
+        if steam_type == "sub":
+            return self.get_bundle_score(steam_id)
+
+        # Return a not implemented error, negative function.
+        self.display.log_console_text("Giveaway-type (%s) not implemented!" % steam_type, log_error)
+        return -1
+
+    def get_bundle_score(self, steam_bundle_id):
+        # Get the soup of the bundle page.
+        soup = self.get_soup("https://store.steampowered.com/sub/%s" % steam_bundle_id)
+
+        # Retrieve all the entries of the bundle.
+        bundle_entries = soup.find_all("div", {"class": ["tab_item", "app_impression_tracked"]})
+
+        # Get the rating of the games inside the bundle.
+        total_bundle_score = 0
+        for bundle_entry in bundle_entries:
+            total_bundle_score += self.get_game_score(bundle_entry["data-ds-appid"])
+
+        # Return avg game score.
+        return total_bundle_score / len(bundle_entries)
+
+    def get_game_score(self, steam_game_id):
+        # Get the steamDB soup.
+        steam_db_soup = self.get_soup("https://steamdb.info/app/%s" % steam_game_id)
+
+        # Retrieve the rating of the game.
+        rating_str = steam_db_soup.find("div", {"class": "header-thing-number"})
+
+        # Check if the rating is visible, else the bot was temporary banned from steamDB.
+        if rating_str is not None:
+            return float(rating_str.text.split(" ")[1][:-1])
+
+        # We got temporary banned, return 0, the next time the game could be added.
+        self.display.log_console_text("Got temporary banned from steamDB by number of requests...", log_warning)
+        return 0
 
     def enter_giveaways(self, giveaways):
         self.display.log_console_text("\nStart entering giveaways!", config=log_verbose)
@@ -273,4 +324,4 @@ def has_no_class(tag):
 
 def random_sleep(sleep):
     if sleep:
-        time.sleep(float(random.randint(300, 800)) / 1000)
+        time.sleep(float(random.randint(500, 1200)) / 1000)
