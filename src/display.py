@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import filedialog
 import json
 
 from src.steamGifts import SteamGifts
@@ -13,27 +14,39 @@ class Display(tk.Tk):
     def __init__(self):
         super().__init__()
 
+        # Set the window defaults.
+        self.title('SteamGifts Giveaway Enter Tool')
+        self.minsize(640, 480)
+        self.geometry("640x480")
+
         # First load the config files.
         self.load_config()
 
-        # Set the title of the application
-        self.title('SteamGifts Giveaway Enter Tool')
+        # Create the import window.
+        import_group = tk.LabelFrame(self, text="Import Settings", fg="steel blue")
+        import_group.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW, ipadx=5, ipady=5)
+        tk.Grid.columnconfigure(import_group, 1, weight=1)
 
         # Create the PATH fill-in field.
-        tk.Label(self, text="Google Chrome Profile Path:").grid(row=0, sticky=tk.NSEW)
-        self.entry_chrome_profile_path = tk.Entry(self, text=self.config["chrome-profile-path"])
-        self.entry_chrome_profile_path.grid(row=1, sticky=tk.NSEW)
+        tk.Label(import_group, text="Google Chrome Profile Path:").grid(row=0, sticky=tk.NSEW)
+        self.entry_chrome_profile_path = tk.Entry(import_group, text=self.config["chrome-profile-path"])
+        self.entry_chrome_profile_path.grid(row=0, column=1, sticky=tk.NSEW, )
         self.entry_chrome_profile_path.insert(0, self.config["chrome-profile-path"])
+        btn_browse_profile_directory = tk.Button(import_group, text="Browse", command=self.browse_button)
+        btn_browse_profile_directory.grid(row=0, column=2, padx=(10, 5))
 
         # Create the enter button
-        tk.Button(self, text='Enter Giveaways', command=self.enter).grid(row=2, sticky=tk.NSEW, pady=4)
+        tk.Button(self, text='Enter Giveaways', command=self.enter, bg="green yellow").grid(row=2, sticky=tk.NSEW)
+
+        # Create the profile.
 
         # Make the grid expand.
+        tk.Grid.rowconfigure(self, 3, weight=1)
         tk.Grid.rowconfigure(self, 3, weight=1)
         tk.Grid.columnconfigure(self, 1, weight=1)
 
         # Create the quit button
-        tk.Button(self, text='Quit', command=self.quit).grid(row=4, sticky=tk.NSEW, pady=4)
+        tk.Button(self, text='Quit', command=self.quit, bg="salmon").grid(row=4, sticky=tk.NSEW, pady=4)
 
         # Create the scroll text field.
         text_container = tk.Frame(self, borderwidth=1, relief="sunken", background="white")
@@ -43,23 +56,42 @@ class Display(tk.Tk):
         self.log.configure(yscrollcommand=text_vsb.set, xscrollcommand=text_hsb.set)
         self.log.bindtags((self.log, self, "all"))
 
-        self.log.grid(row=0, column=0, sticky="nsew", pady=10, padx=10)
-        text_vsb.grid(row=0, column=1, sticky="ns")
-        text_hsb.grid(row=1, column=0, sticky="ew")
+        self.log.grid(row=0, column=0, sticky=tk.NSEW, pady=10, padx=10)
+        text_vsb.grid(row=0, column=1, sticky=tk.NS)
+        text_hsb.grid(row=1, column=0, sticky=tk.EW)
+
+        border_pixel = tk.Frame(text_container, background=self.cget("background"))
+        border_pixel.grid(row=1, column=1, sticky=tk.NSEW)
 
         text_container.grid_rowconfigure(0, weight=1)
         text_container.grid_columnconfigure(0, weight=1)
 
-        text_container.grid(column=1, row=0, rowspan=5, pady=10, padx=10, sticky=tk.NSEW)
+        text_container.grid(column=1, row=1, rowspan=4, pady=10, padx=10, sticky=tk.NSEW)
 
         tk.mainloop()
+
+    def browse_button(self):
+        # Get a directory.
+        directory = tk.filedialog.askdirectory()
+
+        # Check if there was a directory, user can still press cancel.
+        if directory:
+            # Store the config directory.
+            self.config["chrome-profile-path"] = directory
+
+            # Save the directory.
+            self.store_config()
+
+            # Make the entry change text.
+            self.entry_chrome_profile_path.delete(0, tk.END)
+            self.entry_chrome_profile_path.insert(0, self.config["chrome-profile-path"])
 
     def load_config(self):
         with open('../config.json') as f:
             self.config = json.load(f)
 
     def store_config(self):
-        with open('data.txt', 'w') as f:
+        with open('../config.json', 'w') as f:
             json.dump(self.config, f)
 
     def log_console_text(self, text, config=None):
