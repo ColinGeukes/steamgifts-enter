@@ -68,6 +68,9 @@ class Display(tk.Tk):
 
         # Add each line separately to the log.
         for split_line in split_lines:
+            # Normal console log.
+            print(split_line)
+
             # Insert the line.
             self.log.insert(tk.END, split_line)
 

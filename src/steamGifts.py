@@ -23,14 +23,7 @@ class SteamGifts:
         self.display = display
 
         # Setup the driver.
-        try:
-            options = webdriver.ChromeOptions()
-            options.add_argument('--user-data-dir={}'.format(config["chrome-profile-path"]))
-            self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
-        except InvalidArgumentException:
-            print("Could not open a browser instance, make sure that all other instances of the profile " +
-                  "are closed before running the application.")
-            exit(-1)
+        self.driver = self.setup_driver()
 
         # Load the profile.
         self.get_profile_info()
@@ -47,20 +40,34 @@ class SteamGifts:
         # Close the driver.
         self.driver.close()
 
-    def get_soup(self, url, sleep=True):
-        # Let the request wait a bit, to avoid bot detection.
-        if sleep:
-            time.sleep(float(random.randint(300, 800)) / 1000)
-        self.driver.implicitly_wait(30)
+    def setup_driver(self):
+        try:
+            options = webdriver.ChromeOptions()
+            options.add_argument('--user-data-dir={}'.format(self.config["chrome-profile-path"]))
+            return webdriver.Chrome(ChromeDriverManager().install(), options=options)
+        except InvalidArgumentException:
+            print("Could not open a browser instance, make sure that all other instances of the profile " +
+                  "are closed before running the application.")
+            exit(-1)
 
-        # Get the page
+    def get_soup(self, url, sleep=True):
+        # Do a random sleep before access.
+        random_sleep(sleep)
+
+        # Get profile soup.
         self.driver.get(url)
 
         # Retrieve the html of the page as soup.
         return BeautifulSoup(self.driver.page_source, "html.parser")
 
+    def get_request_soup(self, url, sleep=True):
+        random_sleep(sleep)
+
+        page = requests.get(url, cookies=self.cookie)
+        return BeautifulSoup(page.text, "html.parser")
+
     def get_profile_info(self):
-        # Get profile soup.
+        # Get soup of main page.
         soup = self.get_soup(self.base_url, sleep=False)
 
         # Load the required cookie for requests.
@@ -72,16 +79,24 @@ class SteamGifts:
         # Load the profile.
         profile_container = soup.find("a", {"class": "nav__button nav__button--is-dropdown", "href": "/account"})
         profile_spans = profile_container.findAll("span")
-        self.profile = dict({
-            "points": int(profile_spans[0].text),
-            "level": int(profile_spans[1].text.split(" ")[1]),
-            "xsrf_token": soup.find("input", {"name": "xsrf_token"})["value"]
-        })
+        self.profile = dict(
+            points=int(profile_spans[0].text),
+            level=int(profile_spans[1].text.split(" ")[1]),
+            xsrf_token=soup.find("input", {"name": "xsrf_token"})["value"]
+        )
 
         print("profile", self.profile, self.cookie)
 
+        # Log the profile to the GUI.
+        self.display.log_console_text("\nUser Profile:", log_verbose)
+        self.display.log_console_text(" - PHPSESSID: %s\n - xsrf_token: %s\n - Level: %i\n - Points: %i" % (
+            self.cookie["PHPSESSID"], self.profile["xsrf_token"], self.profile["level"], self.profile["points"]))
+
     def generate_search_url(self):
-        # Create a custom search string.
+        # Log to the GUI console.
+        self.display.log_console_text("\nGenerating search string.", log_verbose)
+
+        # Create a custom search string. TODO: Use string[] join instead.
         search_str = ""
         config_search = self.config["search"]
         if config_search:
@@ -107,10 +122,13 @@ class SteamGifts:
 
         # Create the final search url.
         self.search_url = (self.base_search_url + search_str)[:-1]
-        print("Create search string: ", self.search_url)
+        self.display.log_console_text("Search String: %s" % self.search_url)
 
     def retrieve_giveaways(self):
-        soup = self.get_soup(self.search_url)
+        # Log the retrieval of giveaways to the console.
+        self.display.log_console_text("\nRetrieving the giveaways to possible enter.", log_verbose)
+
+        soup = self.get_request_soup(self.search_url)
 
         # A function to retrieve a tag without an class.
         def has_no_class(tag):
@@ -179,7 +197,7 @@ class SteamGifts:
         return sorted(parsed_entries, key=lambda row: (-row['rating'], -row['points']))
 
     def enter_giveaways(self, giveaways):
-        self.display.log_console_text("Start entering giveaways!", config=log_verbose)
+        self.display.log_console_text("\nStart entering giveaways!", config=log_verbose)
 
         # Loop through each giveaway.
         for giveaway in giveaways:
@@ -196,7 +214,8 @@ class SteamGifts:
 
         # Send the server a request to join the giveaway (with some sleep before).
         entry = requests.post(self.base_url + 'ajax.php',
-                              data={'xsrf_token': self.profile["xsrf_token"], 'do': 'entry_insert', 'code': giveaway["giveaway_id"]},
+                              data={'xsrf_token': self.profile["xsrf_token"], 'do': 'entry_insert',
+                                    'code': giveaway["giveaway_id"]},
                               cookies=self.cookie)
 
         # Check if the request was successful, so we can lower the points available on the profile.
@@ -214,3 +233,8 @@ class SteamGifts:
 
         self.display.log_console_text("Could not enter giveaway: " + str(json_data), config=log_error)
         return False
+
+
+def random_sleep(sleep):
+    if sleep:
+        time.sleep(float(random.randint(300, 800)) / 1000)
