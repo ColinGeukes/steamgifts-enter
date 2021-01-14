@@ -18,12 +18,14 @@ class Display(tk.Tk):
         self.title('SteamGifts Giveaway Enter Tool')
         self.minsize(640, 480)
         self.geometry("640x480")
-
         # First load the config files.
         self.load_config()
 
+        self.main = tk.Frame(self)
+        self.main.pack(fill=tk.BOTH, expand=1, padx=5, pady=5)
+
         # Create the import window.
-        import_group = tk.LabelFrame(self, text="Import Settings", fg="steel blue")
+        import_group = tk.LabelFrame(self.main, text="Import Settings", fg="steel blue")
         import_group.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW, ipadx=5, ipady=5)
         tk.Grid.columnconfigure(import_group, 1, weight=1)
 
@@ -35,21 +37,17 @@ class Display(tk.Tk):
         btn_browse_profile_directory = tk.Button(import_group, text="Browse", command=self.browse_button)
         btn_browse_profile_directory.grid(row=0, column=2, padx=(10, 5))
 
-        # Create the enter button
-        tk.Button(self, text='Enter Giveaways', command=self.enter, bg="green yellow").grid(row=2, sticky=tk.NSEW)
-
-        # Create the profile.
 
         # Make the grid expand.
-        tk.Grid.rowconfigure(self, 3, weight=1)
-        tk.Grid.rowconfigure(self, 3, weight=1)
-        tk.Grid.columnconfigure(self, 1, weight=1)
+        tk.Grid.rowconfigure(self.main, 2, weight=1)
+        tk.Grid.columnconfigure(self.main, 1, weight=1)
 
-        # Create the quit button
-        tk.Button(self, text='Quit', command=self.quit, bg="salmon").grid(row=4, sticky=tk.NSEW, pady=4)
+        # Create the enter and  quit button
+        tk.Button(self.main, text='Enter Giveaways', command=self.enter, bg="green yellow").grid(row=3, sticky=tk.NSEW)
+        tk.Button(self.main, text='Quit', command=self.quit, bg="salmon").grid(row=4, sticky=tk.NSEW, pady=4)
 
         # Create the scroll text field.
-        text_container = tk.Frame(self, borderwidth=1, relief="sunken", background="white")
+        text_container = tk.Frame(self.main, borderwidth=1, relief="sunken", background="white")
         self.log = tk.Listbox(text_container, width=24, height=13, borderwidth=0, highlightthickness=0)
         text_vsb = tk.Scrollbar(text_container, orient="vertical", command=self.log.yview)
         text_hsb = tk.Scrollbar(text_container, orient="horizontal", command=self.log.xview)
@@ -66,9 +64,21 @@ class Display(tk.Tk):
         text_container.grid_rowconfigure(0, weight=1)
         text_container.grid_columnconfigure(0, weight=1)
 
-        text_container.grid(column=1, row=1, rowspan=4, pady=10, padx=10, sticky=tk.NSEW)
+        text_container.grid(column=1, row=1, rowspan=4, padx=(10, 0), sticky=tk.NSEW)
 
         tk.mainloop()
+
+    def create_profile_display(self, profile):
+        # Create the profile.
+        import_group = tk.LabelFrame(self.main, text="Profile", fg="steel blue")
+        import_group.grid(row=1, column=0, sticky=tk.NSEW, ipadx=5, ipady=5)
+
+        # Create the labels
+        tk.Label(import_group, text=profile["name"]).grid(row=0, column=0, columnspan=2)
+        tk.Label(import_group, text="Level:", font='Helvetica 10 bold', anchor=tk.W).grid(row=1, column=0, sticky=tk.EW)
+        tk.Label(import_group, text=str(profile["level"]), anchor=tk.W).grid(row=1, column=1, sticky=tk.EW)
+        tk.Label(import_group, text="Points:", font='Helvetica 10 bold', anchor=tk.W).grid(row=2, column=0, sticky=tk.EW)
+        tk.Label(import_group, text=str(profile["points"]), anchor=tk.W).grid(row=2, column=1, sticky=tk.EW)
 
     def browse_button(self):
         # Get a directory.

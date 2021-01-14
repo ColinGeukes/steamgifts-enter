@@ -84,15 +84,18 @@ class SteamGifts:
         self.profile = dict(
             points=int(profile_spans[0].text),
             level=int(profile_spans[1].text.split(" ")[1]),
-            xsrf_token=soup.find("input", {"name": "xsrf_token"})["value"]
+            xsrf_token=soup.find("input", {"name": "xsrf_token"})["value"],
+            name=soup.find("a", {"class": "nav__avatar-outer-wrap"})["href"].split("/")[-1]
         )
 
-        print("profile", self.profile, self.cookie)
+        # Create the profile display.
+        self.display.create_profile_display(self.profile)
 
         # Log the profile to the GUI.
         self.display.log_console_text("\nUser Profile:", log_verbose)
         self.display.log_console_text(" - PHPSESSID: %s\n - xsrf_token: %s\n - Level: %i\n - Points: %i" % (
             self.cookie["PHPSESSID"], self.profile["xsrf_token"], self.profile["level"], self.profile["points"]))
+
 
     def generate_search_url(self):
         # Log to the GUI console.
@@ -306,6 +309,9 @@ class SteamGifts:
         if json_data['type'] == 'success':
             # Lower the total points of the profile
             self.profile["points"] -= giveaway["points"]
+
+            # Update the profile display, by recreating it.
+            self.display.create_profile_display(self.profile)
 
             # Print that we entered the give-away.
             print("Entered giveaway: ", giveaway)
