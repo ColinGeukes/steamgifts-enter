@@ -1,3 +1,4 @@
+import steamspypi
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import InvalidArgumentException
@@ -17,6 +18,7 @@ class SteamGifts:
     cookie = {}
     profile = {}
     min_entries = 10
+    points_threshold_no_query_search = 30
 
     def __init__(self, config, display):
         # Load the config.
@@ -27,6 +29,8 @@ class SteamGifts:
         self.driver = self.setup_driver()
         if self.driver is None:
             return
+
+        # self.get_steam_reviews([329070, 573170])
 
         # Load the profile.
         self.get_profile_info()
@@ -39,6 +43,15 @@ class SteamGifts:
 
         # Enter the giveaways.
         self.enter_giveaways(giveaways)
+
+        # TODO: First continue with the search parameter give-aways if there are still points.
+        # Enter giveaways without search parameters, so we spend the last points available.
+        if self.profile["points"] > self.points_threshold_no_query_search:
+            self.display.log_console_text("\nNot all points were spend in the searched parameters for giveaways.\nWe enter default giveaways without search params to spend last points.", log_info)
+            giveaways_no_search = self.retrieve_giveaways(use_query=False)
+
+            # Enter the giveaways.
+            self.enter_giveaways(giveaways_no_search)
 
         # Close the driver.
         self.driver.close()
@@ -54,10 +67,10 @@ class SteamGifts:
                 "are closed before running the application.", log_error)
             return None
 
-    def get_soup(self, url, sleep=True):
+    def get_soup(self, url):
         # Do a random sleep before access.
-        random_sleep(sleep)
-        self.driver.implicitly_wait(30 + random.randint(0, 15))
+        time.sleep(float(random.randint(500, 1200)) / 1000)
+        self.driver.implicitly_wait(30)
 
         # Get profile soup.
         self.driver.get(url)
@@ -65,15 +78,15 @@ class SteamGifts:
         # Retrieve the html of the page as soup.
         return BeautifulSoup(self.driver.page_source, "html.parser")
 
-    def get_request_soup(self, url, sleep=True):
-        random_sleep(sleep)
+    def get_request_soup(self, url):
+        time.sleep(float(random.randint(500, 1200)) / 1000)
 
         page = requests.get(url, cookies=self.cookie)
         return BeautifulSoup(page.text, "html.parser")
 
     def get_profile_info(self):
         # Get soup of main page.
-        soup = self.get_soup(self.base_url, sleep=False)
+        soup = self.get_soup(self.base_url)
 
         # Load the required cookie for requests.
         print(self.driver.get_cookie("PHPSESSID")["value"])
@@ -132,7 +145,7 @@ class SteamGifts:
         # Create the final search url.
         self.display.log_console_text("Search params: %s" % str(self.search_params))
 
-    def retrieve_giveaways(self):
+    def retrieve_giveaways(self, use_query=True):
         # Keep track of all the parsed entries.
         parsed_entries = []
 
@@ -141,9 +154,9 @@ class SteamGifts:
 
         # Keep looping till we found enough entries.
         current_page = 1
-        while len(parsed_entries) < self.min_entries:
+        while len(parsed_entries) < self.min_entries: # TODO: Also do a min amount of page scrap.
             # Start the search for the given page.
-            entries_found = self.retrieve_giveaways_page(parsed_entries, current_page)
+            entries_found = self.retrieve_giveaways_page(parsed_entries, current_page, use_query)
 
             # Stop if we mined all the pages possible.
             if not entries_found:
@@ -156,17 +169,23 @@ class SteamGifts:
         # Sort the entries and return them to enter.
         return sorted(parsed_entries, key=lambda row: (-row['rating'], -row['points']))
 
-    def retrieve_paged_search_string(self, page):
-        # Create copy of search params and add page search param.
-        search_params_copy = self.search_params.copy()
+    def retrieve_paged_search_string(self, page, use_query):
+        # Check if we use the search params.
+        if use_query:
+            # Create copy of search params and add page search param.
+            search_params_copy = self.search_params.copy()
+        else:
+            search_params_copy = []
+
+        # Add the page search params.
         search_params_copy.append("page=%s" % str(page))
 
         # Return the final search url.
         return self.base_search_url + "&".join(search_params_copy)
 
-    def retrieve_giveaways_page(self, parsed_entries, page):
+    def retrieve_giveaways_page(self, parsed_entries, page, use_query):
         # Retrieve the soup of the current search with the given page
-        soup = self.get_request_soup(self.retrieve_paged_search_string(page))
+        soup = self.get_request_soup(self.retrieve_paged_search_string(page, use_query))
         self.display.log_console_text("Retrieving giveaways for page %i." % page)
 
         # Check if the site give a no-results page, if no-results then return false.
@@ -232,8 +251,8 @@ class SteamGifts:
 
     def get_giveaway_score(self, steam_url):
         # Return perfect score if we are not using the steam db score calculating.
-        if not self.config["search"]["use_steam_db"]:
-            return 100
+        # if not self.config["search"]["use_steam_db"]:
+        #    return 100
 
         # Split the url to check if the giveaway is a bundle or an app.
         steam_app_url_split = steam_url.split("/")
@@ -255,7 +274,7 @@ class SteamGifts:
 
     def get_bundle_score(self, steam_bundle_id):
         # Get the soup of the bundle page.
-        soup = self.get_soup("https://store.steampowered.com/sub/%s" % steam_bundle_id)
+        soup = self.get_request_soup("https://store.steampowered.com/sub/%s" % steam_bundle_id)
 
         # Retrieve all the entries of the bundle.
         bundle_entries = soup.find_all("div", {"class": ["tab_item", "app_impression_tracked"]})
@@ -266,21 +285,23 @@ class SteamGifts:
             total_bundle_score += self.get_game_score(bundle_entry["data-ds-appid"])
 
         # Return avg game score.
-        return total_bundle_score / len(bundle_entries)
+        if total_bundle_score != 0:
+            return total_bundle_score / len(bundle_entries)
+        return 0
 
     def get_game_score(self, steam_game_id):
-        # Get the steamDB soup.
-        steam_db_soup = self.get_soup("https://steamdb.info/app/%s" % steam_game_id)
+        # Get the app details.
+        app_details = steamspypi.download(dict(request="appdetails", appid=str(steam_game_id)))
 
-        # Retrieve the rating of the game.
-        rating_str = steam_db_soup.find("div", {"class": "header-thing-number"})
+        # Get the positive and negative reviews.
+        reviews_positive = int(app_details["positive"])
+        reviews_negative = int(app_details["negative"])
 
-        # Check if the rating is visible, else the bot was temporary banned from steamDB.
-        if rating_str is not None:
-            return float(rating_str.text.split(" ")[1][:-1])
+        # Check if there are any reviews for the algorithm. TODO: Use SteamDB score calculation.
+        if reviews_positive + reviews_positive > 0:
+            return reviews_positive / (reviews_positive + reviews_negative) * 100
 
-        # We got temporary banned, return 0, the next time the game could be added.
-        self.display.log_console_text("Got temporary banned from steamDB by number of requests...", log_warning)
+        # Return 0, as there were no reviews found.
         return 0
 
     def enter_giveaways(self, giveaways):

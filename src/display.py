@@ -5,7 +5,6 @@ import json
 from src.steamGifts import SteamGifts
 from src.log_colors import *
 
-
 class Display(tk.Tk):
     config = dict()
     log_counter = 0
@@ -73,6 +72,7 @@ class Display(tk.Tk):
         self.log_console_text("Simply press \"Enter Giveaways\" to enter giveaways automatically.")
         self.log_console_text("Good luck!")
 
+        # Dirty load some steam app info
         tk.mainloop()
 
     def create_profile_display(self, profile):
