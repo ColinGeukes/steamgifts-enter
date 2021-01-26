@@ -1,3 +1,5 @@
+import math
+
 import steamspypi
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
@@ -47,7 +49,7 @@ class SteamGifts:
         # TODO: First continue with the search parameter give-aways if there are still points.
         # Enter giveaways without search parameters, so we spend the last points available.
         if self.profile["points"] > self.points_threshold_no_query_search:
-            self.display.log_console_text("\nNot all points were spend in the searched parameters for giveaways.\nWe enter default giveaways without search params to spend last points.", log_info)
+            self.display.log_console_text("\nNot all points were spend in the searched parameters for giveaways.\nWe enter default giveaways without search params to spend last points.", log_verbose)
             giveaways_no_search = self.retrieve_giveaways(use_query=False)
 
             # Enter the giveaways.
@@ -213,7 +215,7 @@ class SteamGifts:
             # Check if the minimal rating filter passed.
             if not self.filter_giveaway_sdb_rating(sdb_rating):
                 # Show a warning error that it had insufficient rating, thus was not added.
-                self.display.log_console_text("Passing giveaway: %s, insufficient rating on steamDB." % app_name)
+                self.display.log_console_text("Passing giveaway: %s, insufficient rating: %d" % (app_name, sdb_rating))
                 continue
 
             # Append to the entries.
@@ -291,15 +293,24 @@ class SteamGifts:
 
     def get_game_score(self, steam_game_id):
         # Get the app details.
-        app_details = steamspypi.download(dict(request="appdetails", appid=str(steam_game_id)))
-
+        try:
+            app_details = steamspypi.download(dict(request="appdetails", appid=str(steam_game_id)))
+        except json.decoder.JSONDecodeError:
+            # Could not load the app.
+            self.display.log_console_text("Could not retrieve steam information for app %s" % steam_game_id, log_error)
+            return 0
+        # Check if the game has any reviews.
+        if "positive" not in app_details or "negative" not in app_details:
+            return 0
         # Get the positive and negative reviews.
         reviews_positive = int(app_details["positive"])
         reviews_negative = int(app_details["negative"])
+        reviews_total = reviews_positive + reviews_negative
 
-        # Check if there are any reviews for the algorithm. TODO: Use SteamDB score calculation.
-        if reviews_positive + reviews_positive > 0:
-            return reviews_positive / (reviews_positive + reviews_negative) * 100
+        # Check if there are any reviews for the algorithm.
+        if reviews_total > 0:
+            reviews_score = reviews_positive / reviews_total
+            return (reviews_score - (reviews_score - 0.5) * 2 ** -math.log10(reviews_total + 1)) * 100
 
         # Return 0, as there were no reviews found.
         return 0
