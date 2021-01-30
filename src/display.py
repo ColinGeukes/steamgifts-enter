@@ -4,6 +4,7 @@ import json
 
 from src.steamGifts import SteamGifts
 from src.log_colors import *
+import sys
 
 
 class Display(tk.Tk):
@@ -23,6 +24,7 @@ class Display(tk.Tk):
 
     # Settings side-panel.
     settings_start_startup = None
+    settings_auto_quit = None
 
     def __init__(self):
         super().__init__()
@@ -56,7 +58,8 @@ class Display(tk.Tk):
 
         # Create the enter and  quit button
         tk.Button(self.main, text='Enter Giveaways', command=self.enter, bg="green yellow").grid(row=5, sticky=tk.NSEW)
-        tk.Button(self.main, text='Quit', command=self.quit, bg="salmon").grid(row=6, sticky=tk.NSEW, pady=4)
+        tk.Button(self.main, text='Quit', command=self.quit_application, bg="salmon").grid(row=6, sticky=tk.NSEW,
+                                                                                           pady=4)
 
         # Create the scroll text field.
         text_container = tk.Frame(self.main, borderwidth=1, relief="sunken", background="white")
@@ -94,8 +97,16 @@ class Display(tk.Tk):
         self.log_console_text("Simply press \"Enter Giveaways\" to enter giveaways automatically.")
         self.log_console_text("Good luck!")
 
+        # Auto start giveaways if option is enabled
+        if self.config["settings"]["auto_start"] == 1:
+            self.enter()
+
         # Dirty load some steam app info
         tk.mainloop()
+
+    def quit_application(self):
+        self.quit()
+        sys.exit()
 
     def create_profile_display(self):
         # Create the profile.
@@ -155,14 +166,22 @@ class Display(tk.Tk):
         import_group.grid(row=3, column=0, sticky=tk.NSEW, ipadx=5, ipady=5)
 
         self.settings_start_startup = tk.IntVar(value=self.config["settings"]["auto_start"])
-        c = tk.Checkbutton(import_group,
-            text="Enter on start",
-            variable=self.settings_start_startup,
-            command=self.on_enter_start_update)
-        c.pack()
+        self.settings_auto_quit = tk.IntVar(value=self.config["settings"]["auto_quit"])
+        tk.Checkbutton(import_group,
+                       text="Enter on start",
+                       variable=self.settings_start_startup,
+                       command=self.on_settings_auto_start, anchor=tk.W).pack(side=tk.TOP, fill=tk.BOTH)
+        tk.Checkbutton(import_group,
+                       text="Quit on complete",
+                       variable=self.settings_auto_quit,
+                       command=self.on_settings_auto_quit, anchor=tk.W).pack(side=tk.TOP, fill=tk.BOTH)
 
-    def on_enter_start_update(self):
+    def on_settings_auto_start(self):
         self.config["settings"]["auto_start"] = self.settings_start_startup.get()
+        self.store_config()
+
+    def on_settings_auto_quit(self):
+        self.config["settings"]["auto_quit"] = self.settings_auto_quit.get()
         self.store_config()
 
     def browse_button(self):
@@ -182,11 +201,11 @@ class Display(tk.Tk):
             self.entry_chrome_profile_path.insert(0, self.config["chrome-profile-path"])
 
     def load_config(self):
-        with open('../config.json') as f:
+        with open('config.json') as f:
             self.config = json.load(f)
 
     def store_config(self):
-        with open('../config.json', 'w') as f:
+        with open('config.json', 'w') as f:
             json.dump(self.config, f)
 
     def log_console_text(self, text, config=None):

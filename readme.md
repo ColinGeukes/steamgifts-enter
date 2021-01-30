@@ -14,16 +14,22 @@ In the `root` of the project a `config.json` file must be created with the follo
 {
   "chrome-profile-path": "C:\\Users\\___USER___\\AppData\\Local\\Google\\Chrome\\User Data\\___CUSTOM PROFILE___",
   "search": {
-    "level_min": 2,
-    "level_max": 8,
     "entry_min": 0,
     "entry_max": 5000,
     "point_min": 10,
     "point_max": 50,
     "rating_min": 60,
     "rating_max": 100
+  },
+  "settings":  {
+    "auto_start": 0
   }
 }
 ```
 The `chrome-profile-path` must direct to the custom chrome profile created for the application.
 
+### Creating an executable
+Using `pyinstaller` we can create an executable application from the python files. This can be done by running the following command: `pyinstaller --onefile src\display.py`
+
+### Automatically run the miner on pc startup
+If you are using windows 10, then you can automatically assign the application to a startup protocol. This can be done by creating a new task in Task Scheduler application from windows 10. Allowing to always enroll for giveaways when you pc starts or any task configuration you assigned to it.

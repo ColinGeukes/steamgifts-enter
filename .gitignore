@@ -1,5 +1,6 @@
 .idea/
 venv/
-config.json
+*/config.json
 debug.log
 src/__pycache__/
+dist/

@@ -12,7 +12,6 @@ import json
 import time
 from src.log_colors import *
 
-
 class SteamGifts:
     base_url = "https://www.steamgifts.com/"
     base_search_url = base_url + "giveaways/search?"
@@ -49,6 +48,10 @@ class SteamGifts:
 
         # Close the driver.
         self.driver.close()
+
+        # Auto-close if option enabled.
+        if self.config["settings"]["auto_quit"] == 1:
+            self.display.quit_application()
 
     def setup_driver(self):
         try:
@@ -227,9 +230,6 @@ class SteamGifts:
         return True
 
     def filter_giveaway_sdb_rating(self, sdb_rating):
-        # Check if db is not active, if so always let it pass.
-        if not self.config["search"]["use_steam_db"]:
-            return True
 
         # Check if the rating is inside the requested boundaries.
         if self.config["search"]["rating_min"] and sdb_rating < self.config["search"]["rating_min"]:
