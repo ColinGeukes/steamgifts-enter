@@ -11,8 +11,18 @@ class Display(tk.Tk):
     log_counter = 0
     sg_bot = None
 
+    # The profile session side-panel.
+    current_session_username = None
+    current_session_level = None
+    current_session_points = None
+
+    # The mining session side-panel.
     current_session_entries = None
     current_session_total_points = None
+    current_session_entered = None
+
+    # Settings side-panel.
+    settings_start_startup = None
 
     def __init__(self):
         super().__init__()
@@ -68,8 +78,14 @@ class Display(tk.Tk):
 
         text_container.grid(column=1, row=1, rowspan=6, padx=(10, 0), sticky=tk.NSEW)
 
+        # Create the profile display left navbar.
+        self.create_profile_display()
+
         # Create the mining display left navbar.
         self.create_mining_display()
+
+        # Create settings display.
+        self.create_settings_display()
 
         # Add entry text to the console log.
         self.log_console_text("Welcome to the steamGifts auto enter bot!", log_verbose)
@@ -81,18 +97,31 @@ class Display(tk.Tk):
         # Dirty load some steam app info
         tk.mainloop()
 
-    def create_profile_display(self, profile):
+    def create_profile_display(self):
         # Create the profile.
         import_group = tk.LabelFrame(self.main, text="Profile", fg="steel blue")
         import_group.grid(row=1, column=0, sticky=tk.NSEW, ipadx=5, ipady=5)
 
+        self.current_session_username = tk.StringVar(value="<Not initialized>")
+        self.current_session_level = tk.StringVar(value="<?>")
+        self.current_session_points = tk.StringVar(value="<?>")
+
         # Create the labels
-        tk.Label(import_group, text=profile["name"]).grid(row=0, column=0, columnspan=2)
-        tk.Label(import_group, text="Level:", font='Helvetica 10 bold', anchor=tk.W).grid(row=1, column=0, sticky=tk.EW)
-        tk.Label(import_group, text=str(profile["level"]), anchor=tk.W).grid(row=1, column=1, sticky=tk.EW)
-        tk.Label(import_group, text="Points:", font='Helvetica 10 bold', anchor=tk.W).grid(row=2, column=0,
-                                                                                           sticky=tk.EW)
-        tk.Label(import_group, text=str(profile["points"]), anchor=tk.W).grid(row=2, column=1, sticky=tk.EW)
+        tk.Label(import_group, textvariable=self.current_session_username, anchor=tk.CENTER) \
+            .grid(row=0, column=0, columnspan=2)
+        tk.Label(import_group, text="Level:", font='Helvetica 10 bold', anchor=tk.W) \
+            .grid(row=1, column=0, sticky=tk.EW)
+        tk.Label(import_group, textvariable=self.current_session_level, anchor=tk.W) \
+            .grid(row=1, column=1, sticky=tk.EW)
+        tk.Label(import_group, text="Points:", font='Helvetica 10 bold', anchor=tk.W) \
+            .grid(row=2, column=0, sticky=tk.EW)
+        tk.Label(import_group, textvariable=self.current_session_points, anchor=tk.W) \
+            .grid(row=2, column=1, sticky=tk.EW)
+
+    def update_profile_display(self, profile):
+        self.current_session_username.set(profile["name"])
+        self.current_session_level.set(str(profile["level"]))
+        self.current_session_points.set(str(profile["points"]))
 
     def create_mining_display(self):
         # Create the profile.
@@ -101,20 +130,40 @@ class Display(tk.Tk):
 
         self.current_session_entries = tk.StringVar(value="0")
         self.current_session_total_points = tk.StringVar(value="0")
+        self.current_session_entered = tk.StringVar(value="0")
 
         # Create the labels
-        tk.Label(import_group, text="Giveaways:", font='Helvetica 10 bold', anchor=tk.W).grid(row=0, column=0,
-                                                                                              sticky=tk.EW)
-        tk.Label(import_group, textvariable=self.current_session_entries, anchor=tk.W).grid(row=0, column=1,
-                                                                                            sticky=tk.EW)
-        tk.Label(import_group, text="Total Points:", font='Helvetica 10 bold', anchor=tk.W).grid(row=1, column=0,
-                                                                                                 sticky=tk.EW)
-        tk.Label(import_group, textvariable=self.current_session_total_points, anchor=tk.W).grid(row=1, column=1,
-                                                                                                 sticky=tk.EW)
+        tk.Label(import_group, text="Giveaways:", font='Helvetica 10 bold', anchor=tk.W) \
+            .grid(row=0, column=0, sticky=tk.EW)
+        tk.Label(import_group, textvariable=self.current_session_entries, anchor=tk.W) \
+            .grid(row=0, column=1, sticky=tk.EW)
+        tk.Label(import_group, text="Total Points:", font='Helvetica 10 bold', anchor=tk.W) \
+            .grid(row=1, column=0, sticky=tk.EW)
+        tk.Label(import_group, textvariable=self.current_session_total_points, anchor=tk.W) \
+            .grid(row=1, column=1, sticky=tk.EW)
+        tk.Label(import_group, text="Entered:", font='Helvetica 10 bold', anchor=tk.W) \
+            .grid(row=2, column=0, sticky=tk.EW)
+        tk.Label(import_group, textvariable=self.current_session_entered, anchor=tk.W) \
+            .grid(row=2, column=1, sticky=tk.EW)
 
     def update_current_mining_display(self, entries, points):
         self.current_session_entries.set(str(entries))
         self.current_session_total_points.set(str(points))
+
+    def create_settings_display(self):
+        import_group = tk.LabelFrame(self.main, text="Settings", fg="steel blue")
+        import_group.grid(row=3, column=0, sticky=tk.NSEW, ipadx=5, ipady=5)
+
+        self.settings_start_startup = tk.IntVar(value=self.config["settings"]["auto_start"])
+        c = tk.Checkbutton(import_group,
+            text="Enter on start",
+            variable=self.settings_start_startup,
+            command=self.on_enter_start_update)
+        c.pack()
+
+    def on_enter_start_update(self):
+        self.config["settings"]["auto_start"] = self.settings_start_startup.get()
+        self.store_config()
 
     def browse_button(self):
         # Get a directory.

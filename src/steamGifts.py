@@ -32,8 +32,6 @@ class SteamGifts:
         if self.driver is None:
             return
 
-        # self.get_steam_reviews([329070, 573170])
-
         # Load the profile.
         self.get_profile_info()
 
@@ -45,6 +43,9 @@ class SteamGifts:
 
         # Enter the giveaways.
         self.enter_giveaways(giveaways)
+
+        # Show a completion message in the log.
+        self.display.log_console_text("\nDone entering giveaways!", config=log_verbose)
 
         # Close the driver.
         self.driver.close()
@@ -98,7 +99,7 @@ class SteamGifts:
         )
 
         # Create the profile display.
-        self.display.create_profile_display(self.profile)
+        self.display.update_profile_display(self.profile)
 
         # Log the profile to the GUI.
         self.display.log_console_text("\nUser Profile:", log_verbose)
@@ -131,6 +132,7 @@ class SteamGifts:
         # Keep track of all the parsed entries.
         parsed_entries = dict(entries=[], totalPoints=0)
         self.display.update_current_mining_display(0, 0)
+        self.display.current_session_entered.set("0")
 
         # Log the retrieval of giveaways to the console.
         self.display.log_console_text("\nRetrieving the giveaways to possible enter.", log_verbose)
@@ -313,8 +315,6 @@ class SteamGifts:
         for giveaway in giveaways:
             self.enter_giveaway(giveaway)
 
-        self.display.log_console_text("\nDone entering giveaways!", config=log_verbose)
-
     def enter_giveaway(self, giveaway):
 
         # Check if we have enough points to enter.
@@ -338,12 +338,12 @@ class SteamGifts:
             self.profile["points"] -= giveaway["points"]
 
             # Update the profile display, by recreating it.
-            self.display.create_profile_display(self.profile)
+            self.display.update_profile_display(self.profile)
 
             # Print that we entered the give-away.
             print("Entered giveaway: ", giveaway)
             self.display.log_console_text("Entered giveaway: " + str(giveaway), config=log_info)
-
+            self.display.current_session_entered.set(str(int(self.display.current_session_entered.get()) + 1))
             return True
 
         self.display.log_console_text("Could not enter giveaway: " + str(json_data), config=log_error)
