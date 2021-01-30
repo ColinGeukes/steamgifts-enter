@@ -46,15 +46,6 @@ class SteamGifts:
         # Enter the giveaways.
         self.enter_giveaways(giveaways)
 
-        # TODO: First continue with the search parameter give-aways if there are still points.
-        # Enter giveaways without search parameters, so we spend the last points available.
-        if self.profile["points"] > self.points_threshold_no_query_search:
-            self.display.log_console_text("\nNot all points were spend in the searched parameters for giveaways.\nWe enter default giveaways without search params to spend last points.", log_verbose)
-            giveaways_no_search = self.retrieve_giveaways(use_query=False)
-
-            # Enter the giveaways.
-            self.enter_giveaways(giveaways_no_search)
-
         # Close the driver.
         self.driver.close()
 
@@ -122,17 +113,6 @@ class SteamGifts:
         self.search_params = []
         config_search = self.config["search"]
         if config_search:
-
-            # Check if level min was filled in.
-            if config_search["level_min"] is not None:
-                self.search_params.append(
-                    "level_min={}".format(str(min(self.profile["level"], config_search["level_min"]))))
-
-            # Check if level max was filled in.
-            if config_search["level_max"] is not None:
-                self.search_params.append(
-                    "level_max={}".format(str(min(self.profile["level"], config_search["level_max"]))))
-
             # Create a simple add function
             def create_simple_param(key):
                 if config_search[key] is not None:
@@ -149,29 +129,34 @@ class SteamGifts:
 
     def retrieve_giveaways(self, use_query=True):
         # Keep track of all the parsed entries.
-        parsed_entries = []
+        parsed_entries = dict(entries=[], totalPoints=0)
+        self.display.update_current_mining_display(0, 0)
 
         # Log the retrieval of giveaways to the console.
         self.display.log_console_text("\nRetrieving the giveaways to possible enter.", log_verbose)
-
         # Keep looping till we found enough entries.
         current_page = 1
-        while len(parsed_entries) < self.min_entries: # TODO: Also do a min amount of page scrap.
-            # Start the search for the given page.
-            entries_found = self.retrieve_giveaways_page(parsed_entries, current_page, use_query)
+        current_level = self.profile["level"]
+        min_retrieved_giveaway_total_points = max(200, self.profile["points"] * 3)
 
-            # Stop if we mined all the pages possible.
+        while current_level >= 0 and parsed_entries["totalPoints"] < min_retrieved_giveaway_total_points:  # TODO: Also do a min amount of page scrap.
+            # Start the search for the given page.
+            entries_found = self.retrieve_giveaways_page(parsed_entries, current_level, current_page, use_query)
+
+            # Stop if we mined all the pages, thus we lower the level we are querying.
             if not entries_found:
-                self.display.log_console_text("There were no more entries matching your search criteria.", log_warning)
-                break
+                self.display.log_console_text("There were no more entries matching your search criteria for level %d, lower level for more results." % current_level, log_warning)
+                current_page = 0
+                current_level -= 1
+                continue
 
             # Increment the page.
             current_page += 1
 
         # Sort the entries and return them to enter.
-        return sorted(parsed_entries, key=lambda row: (-row['rating'], -row['points']))
+        return sorted(parsed_entries['entries'], key=lambda row: (-row['rating'], -row['points']))
 
-    def retrieve_paged_search_string(self, page, use_query):
+    def retrieve_paged_search_string(self, level, page, use_query):
         # Check if we use the search params.
         if use_query:
             # Create copy of search params and add page search param.
@@ -180,19 +165,21 @@ class SteamGifts:
             search_params_copy = []
 
         # Add the page search params.
+        search_params_copy.append("level_min=%s" % str(level))
+        search_params_copy.append("level_max=%s" % str(level))
         search_params_copy.append("page=%s" % str(page))
 
         # Return the final search url.
         return self.base_search_url + "&".join(search_params_copy)
 
-    def retrieve_giveaways_page(self, parsed_entries, page, use_query):
+    def retrieve_giveaways_page(self, parsed_entries, level, page, use_query):
         # Retrieve the soup of the current search with the given page
-        soup = self.get_request_soup(self.retrieve_paged_search_string(page, use_query))
-        self.display.log_console_text("Retrieving giveaways for page %i." % page)
+        soup = self.get_request_soup(self.retrieve_paged_search_string(level, page, use_query))
+        self.display.log_console_text("Retrieving giveaways for (level, page)=(%i, %i)." % (level, page))
 
         # Check if the site give a no-results page, if no-results then return false.
         if soup.find("div", {"class": "pagination pagination--no-results"}) is not None:
-            self.display.log_console_text("There were no entries at page %i." % page, log_error)
+            self.display.log_console_text("There were no entries at (level, page)=(%i, %i)." % (level, page), log_error)
             return False
 
         # Retrieve all the entries.
@@ -200,7 +187,7 @@ class SteamGifts:
             has_no_class, recursive=False)
         giveaway_entries = giveaway_list.findAll("div", "giveaway__row-inner-wrap")
 
-        # Print the giveaways
+        # Print the giveaways TODO: Keep mining giveaways until we got enough to spend 3x the total amount of points, this gives a good set of games.
         for giveaway_entry in giveaway_entries:
             # Check if the giveaway is not faded (already enrolled).
             if 'is-faded' in giveaway_entry['class']:
@@ -215,7 +202,8 @@ class SteamGifts:
             # Check if the minimal rating filter passed.
             if not self.filter_giveaway_sdb_rating(sdb_rating):
                 # Show a warning error that it had insufficient rating, thus was not added.
-                self.display.log_console_text("Passing giveaway: %s, insufficient rating: %d" % (app_name, sdb_rating))
+                self.display.log_console_text(
+                    "Passing giveaway: %s, insufficient rating: %0.2f" % (app_name, sdb_rating))
                 continue
 
             # Append to the entries.
@@ -226,7 +214,10 @@ class SteamGifts:
                 giveaway_id=giveaway_entry.find("a", {"class": "giveaway__heading__name"})['href'].split("/")[2],
                 rating=sdb_rating
             )
-            parsed_entries.append(entry)
+            parsed_entries['entries'].append(entry)
+            parsed_entries['totalPoints'] += entry['points']
+
+            self.display.update_current_mining_display(len(parsed_entries['entries']), parsed_entries['totalPoints'])
 
             # Log the addition of the give-away.
             self.display.log_console_text("Adding giveaway: " + str(entry))
@@ -321,6 +312,8 @@ class SteamGifts:
         # Loop through each giveaway.
         for giveaway in giveaways:
             self.enter_giveaway(giveaway)
+
+        self.display.log_console_text("\nDone entering giveaways!", config=log_verbose)
 
     def enter_giveaway(self, giveaway):
 

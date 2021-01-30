@@ -5,10 +5,14 @@ import json
 from src.steamGifts import SteamGifts
 from src.log_colors import *
 
+
 class Display(tk.Tk):
     config = dict()
     log_counter = 0
     sg_bot = None
+
+    current_session_entries = None
+    current_session_total_points = None
 
     def __init__(self):
         super().__init__()
@@ -36,14 +40,13 @@ class Display(tk.Tk):
         btn_browse_profile_directory = tk.Button(import_group, text="Browse", command=self.browse_button)
         btn_browse_profile_directory.grid(row=0, column=2, padx=(10, 5))
 
-
         # Make the grid expand.
-        tk.Grid.rowconfigure(self.main, 2, weight=1)
+        tk.Grid.rowconfigure(self.main, 4, weight=1)
         tk.Grid.columnconfigure(self.main, 1, weight=1)
 
         # Create the enter and  quit button
-        tk.Button(self.main, text='Enter Giveaways', command=self.enter, bg="green yellow").grid(row=3, sticky=tk.NSEW)
-        tk.Button(self.main, text='Quit', command=self.quit, bg="salmon").grid(row=4, sticky=tk.NSEW, pady=4)
+        tk.Button(self.main, text='Enter Giveaways', command=self.enter, bg="green yellow").grid(row=5, sticky=tk.NSEW)
+        tk.Button(self.main, text='Quit', command=self.quit, bg="salmon").grid(row=6, sticky=tk.NSEW, pady=4)
 
         # Create the scroll text field.
         text_container = tk.Frame(self.main, borderwidth=1, relief="sunken", background="white")
@@ -63,7 +66,10 @@ class Display(tk.Tk):
         text_container.grid_rowconfigure(0, weight=1)
         text_container.grid_columnconfigure(0, weight=1)
 
-        text_container.grid(column=1, row=1, rowspan=4, padx=(10, 0), sticky=tk.NSEW)
+        text_container.grid(column=1, row=1, rowspan=6, padx=(10, 0), sticky=tk.NSEW)
+
+        # Create the mining display left navbar.
+        self.create_mining_display()
 
         # Add entry text to the console log.
         self.log_console_text("Welcome to the steamGifts auto enter bot!", log_verbose)
@@ -84,8 +90,31 @@ class Display(tk.Tk):
         tk.Label(import_group, text=profile["name"]).grid(row=0, column=0, columnspan=2)
         tk.Label(import_group, text="Level:", font='Helvetica 10 bold', anchor=tk.W).grid(row=1, column=0, sticky=tk.EW)
         tk.Label(import_group, text=str(profile["level"]), anchor=tk.W).grid(row=1, column=1, sticky=tk.EW)
-        tk.Label(import_group, text="Points:", font='Helvetica 10 bold', anchor=tk.W).grid(row=2, column=0, sticky=tk.EW)
+        tk.Label(import_group, text="Points:", font='Helvetica 10 bold', anchor=tk.W).grid(row=2, column=0,
+                                                                                           sticky=tk.EW)
         tk.Label(import_group, text=str(profile["points"]), anchor=tk.W).grid(row=2, column=1, sticky=tk.EW)
+
+    def create_mining_display(self):
+        # Create the profile.
+        import_group = tk.LabelFrame(self.main, text="Mining Session", fg="steel blue")
+        import_group.grid(row=2, column=0, sticky=tk.NSEW, ipadx=5, ipady=5)
+
+        self.current_session_entries = tk.StringVar(value="0")
+        self.current_session_total_points = tk.StringVar(value="0")
+
+        # Create the labels
+        tk.Label(import_group, text="Giveaways:", font='Helvetica 10 bold', anchor=tk.W).grid(row=0, column=0,
+                                                                                              sticky=tk.EW)
+        tk.Label(import_group, textvariable=self.current_session_entries, anchor=tk.W).grid(row=0, column=1,
+                                                                                            sticky=tk.EW)
+        tk.Label(import_group, text="Total Points:", font='Helvetica 10 bold', anchor=tk.W).grid(row=1, column=0,
+                                                                                                 sticky=tk.EW)
+        tk.Label(import_group, textvariable=self.current_session_total_points, anchor=tk.W).grid(row=1, column=1,
+                                                                                                 sticky=tk.EW)
+
+    def update_current_mining_display(self, entries, points):
+        self.current_session_entries.set(str(entries))
+        self.current_session_total_points.set(str(points))
 
     def browse_button(self):
         # Get a directory.
